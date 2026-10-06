@@ -4,6 +4,7 @@ CMakeFiles/
 cmake_install.cmake
 compile_commands.json
 external/stb/*.h
+external/toolchains/
 *.o
 *.spv
 report/

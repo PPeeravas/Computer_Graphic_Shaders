@@ -12,7 +12,24 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Vulkan
 find_package(Vulkan REQUIRED)
-find_package(glfw3 REQUIRED)
+include(FetchContent)
+
+# GLFW is not distributed with the Vulkan SDK. Prefer a system installation when
+# one is available, but make a fresh checkout buildable without separately
+# installing a GLFW development package.
+find_package(glfw3 QUIET)
+if(NOT TARGET glfw)
+  set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.4
+    GIT_SHALLOW TRUE
+  )
+  FetchContent_MakeAvailable(glfw)
+endif()
 
 # GLM ships with the Vulkan SDK, but not always on the default include path
 find_path(GLM_INCLUDE_DIR glm/glm.hpp
@@ -21,12 +38,18 @@ find_path(GLM_INCLUDE_DIR glm/glm.hpp
 )
 
 if(NOT GLM_INCLUDE_DIR)
-  message(FATAL_ERROR "glm/glm.hpp not found. It comes with the Vulkan SDK: set VULKAN_SDK "
-                      "or source the SDK's setup-env.sh. On Linux with apt, install libglm-dev")
+  message(STATUS "GLM not found in the Vulkan SDK; fetching GLM 1.0.1")
+  FetchContent_Declare(glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 1.0.1
+    GIT_SHALLOW TRUE
+  )
+  FetchContent_MakeAvailable(glm)
+  set(GLM_INCLUDE_DIR "${glm_SOURCE_DIR}")
 endif()
 
-add_library(glm INTERFACE)
-target_include_directories(glm SYSTEM INTERFACE ${GLM_INCLUDE_DIR})
+add_library(lab07_glm INTERFACE)
+target_include_directories(lab07_glm SYSTEM INTERFACE ${GLM_INCLUDE_DIR})
 
 # stb is two headers, fetched once, used only by src/utils/image.cpp
 set(STB_COMMIT f0569113c93ad095470c54bf34a17b36646bbbb5)
@@ -103,7 +126,7 @@ target_include_directories(lab07core PUBLIC
 target_link_libraries(lab07core PUBLIC
   Vulkan::Vulkan
   glfw
-  glm
+  lab07_glm
   stb
 )
 

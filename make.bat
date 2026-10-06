@@ -2,6 +2,8 @@
 setlocal enabledelayedexpansion
 set BUILD=build
 set TARGET=%1
+set "TOOLCHAIN_BIN=%~dp0external\toolchains\mingw64\bin"
+set "PATH=%TOOLCHAIN_BIN%;%PATH%"
 
 if "%TARGET%"=="" set TARGET=all
 if "%TARGET%"=="clean" (
@@ -9,7 +11,10 @@ if "%TARGET%"=="clean" (
   exit /b 0
 )
 
-cmake -S . -B %BUILD% -DCMAKE_BUILD_TYPE=Release || exit /b 1
+cmake -S . -B %BUILD% -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_C_COMPILER="%TOOLCHAIN_BIN%\gcc.exe" ^
+  -DCMAKE_CXX_COMPILER="%TOOLCHAIN_BIN%\g++.exe" ^
+  -DCMAKE_MAKE_PROGRAM="%TOOLCHAIN_BIN%\mingw32-make.exe" || exit /b 1
 
 if "%TARGET%"=="all" (
   cmake --build %BUILD% --config Release || exit /b 1
