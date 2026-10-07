@@ -28,13 +28,13 @@ float sdf_box(vec2 p, vec2 hs) {
   return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0);
 }
 
-// TODO(TASK 3b)
+
 float sdf_rounded_box(vec2 p, vec2 hs, float r) {
   vec2 shrink_hs = hs -r;
   return sdf_box(p, shrink_hs) - r;
 }
 
-// TODO(TASK 3c)
+
 float op_smooth_union(float d1, float d2, float k) {
 
   float h = clamp(0.5 + 0.5*(d2-d1)/k , 0 , 1);
@@ -42,10 +42,13 @@ float op_smooth_union(float d1, float d2, float k) {
 
 }
 
-// TODO(TASK 3d)
+
 float scene(vec2 p) {
-  
-  return 1.0;
+  float body = sdf_rounded_box(p- vec2(-0.35,0),vec2(0.40,0.25),0.08);
+  float ball = sdf_circle(p-ball_center(),0.30);
+  float d = op_smooth_union(body,ball,0.20);
+  float hole = sdf_circle(p - vec2(-0.35,0),0.12);
+  return op_subtract(d, hole);
 }
 
 void main() {
@@ -55,7 +58,6 @@ void main() {
 
   vec3 col = vec3(0.0);
   if (u.mode == 0u) {
-    // TODO(TASK 3e)
     float edge = smoothstep(w,-w,d);
     col = mix(vec3(0.0),vec3(0.9,0.5,0.2),edge);
   }
