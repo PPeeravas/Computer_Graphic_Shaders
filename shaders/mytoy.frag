@@ -42,20 +42,31 @@ vec2 interaction_point() {
 }
 
 float scene_sdf(vec2 p, vec2 attractor) {
-  vec2 bodyP = rotate2d(0.10 * sin(iTime * 0.55)) * p;
-  float body = sdf_rounded_box(bodyP, vec2(0.43, 0.18), 0.13);
+  vec2 q = rotate2d(0.12 * sin(iTime * 0.45)) * p;
+  float shell = sdf_circle(q, 0.34 + 0.012 * sin(iTime * 1.8));
 
-  vec2 orbitA = vec2(0.42 * cos(iTime * 0.82),
-                     0.24 * sin(iTime * 0.82));
-  vec2 orbitB = vec2(0.34 * cos(-iTime * 1.13 + 2.1),
-                     0.31 * sin(-iTime * 1.13 + 2.1));
+  vec2 orbitA = vec2(0.34 * cos(iTime * 0.82),
+                     0.25 * sin(iTime * 0.82));
+  vec2 orbitB = vec2(0.29 * cos(-iTime * 1.13 + 2.1),
+                     0.34 * sin(-iTime * 1.13 + 2.1));
 
-  float d = op_smooth_union(body, sdf_circle(p - orbitA, 0.105), 0.11);
-  d = op_smooth_union(d, sdf_circle(p - orbitB, 0.075), 0.09);
-  d = op_smooth_union(d, sdf_circle(p - attractor, 0.09), 0.08);
+  shell = op_smooth_union(shell, sdf_circle(p - orbitA, 0.105), 0.10);
+  shell = op_smooth_union(shell, sdf_circle(p - orbitB, 0.080), 0.09);
+  shell = op_smooth_union(shell, sdf_circle(p - attractor, 0.070), 0.07);
 
-  float core = sdf_circle(bodyP, 0.075 + 0.012 * sin(iTime * 2.0));
-  return op_subtract(d, core);
+  float core = sdf_circle(q, 0.175 + 0.014 * sin(iTime * 2.4));
+  return op_subtract(shell, core);
+}
+
+float star_field(vec2 p) {
+  vec2 scaled = p * 18.0;
+  ivec2 cell = ivec2(floor(scaled));
+  vec2 local = fract(scaled) - 0.5;
+  float seed = hash(uvec2(cell + ivec2(1000)));
+  float star = smoothstep(0.075, 0.0, length(local));
+  float visible = step(0.965, seed);
+  float twinkle = 0.55 + 0.45 * sin(iTime * (2.0 + seed * 4.0) + seed * 31.0);
+  return star * visible * twinkle;
 }
 
 vec3 distance_contours(float d) {
@@ -71,33 +82,44 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 p = (2.0 * fragCoord - iResolution.xy) / iResolution.y;
   vec2 attractor = interaction_point();
 
-  // Two inexpensive noise layers form a drifting nebula. Five plus three
-  // octaves keep the effect comfortably inside the lab's GPU-time budget.
+  // Two inexpensive noise layers form a drifting nebula.
   vec2 drift = vec2(-0.10, 0.055) * iTime;
   float cloud = fbm(p * 1.75 + drift + vec2(3.1, 7.4), 5u);
   float detail = fbm(p * 3.60 - drift * 1.7 + vec2(8.2, 1.6), 3u);
 
-  vec3 navy = vec3(0.010, 0.018, 0.075);
-  vec3 cyan = vec3(0.030, 0.330, 0.470);
-  vec3 violet = vec3(0.280, 0.055, 0.390);
+  vec3 navy = vec3(0.004, 0.008, 0.040);
+  vec3 cyan = vec3(0.010, 0.260, 0.420);
+  vec3 violet = vec3(0.300, 0.025, 0.400);
   vec3 col = mix(navy, cyan, smoothstep(0.18, 0.82, cloud));
   col = mix(col, violet, smoothstep(0.46, 0.86, detail) * 0.62);
+  col += star_field(p + drift * 0.12) * vec3(0.55, 0.82, 1.0);
 
   float d = scene_sdf(p, attractor);
   float aa = max(fwidth(d), 1e-5);
   float fill = 1.0 - smoothstep(-aa, aa, d);
-  float outerGlow = exp(-13.0 * max(d, 0.0));
-  float rimGlow = exp(-38.0 * abs(d));
+  float outerGlow = exp(-10.0 * max(d, 0.0));
+  float rimGlow = exp(-45.0 * abs(d));
 
-  vec3 warm = vec3(1.00, 0.25, 0.08);
-  vec3 gold = vec3(1.00, 0.78, 0.22);
-  vec3 material = mix(warm, gold,
-                      0.5 + 0.5 * sin(iTime * 1.4 + p.x * 4.0));
-  material *= 0.78 + 0.22 * detail;
+  float angle = atan(p.y, p.x);
+  float radius = length(p);
+  float energy = 0.5 + 0.5 * sin(angle * 7.0 - iTime * 3.2
+                                 + detail * 8.0 + radius * 15.0);
 
-  col += outerGlow * vec3(0.02, 0.26, 0.58);
-  col += rimGlow * vec3(0.55, 0.18, 0.72);
+  vec3 magenta = vec3(1.00, 0.08, 0.52);
+  vec3 gold = vec3(1.00, 0.76, 0.16);
+  vec3 material = mix(magenta, gold, energy);
+  material *= 0.70 + 0.45 * detail;
+
+  col += outerGlow * vec3(0.01, 0.20, 0.75);
+  col += rimGlow * mix(vec3(0.18, 0.45, 1.0), vec3(1.0, 0.12, 0.65), energy);
   col = mix(col, material, fill);
+
+  // Energy rings and a rotating sweep make the portal feel deeper.
+  float ringA = exp(-90.0 * abs(radius - (0.48 + 0.015 * sin(iTime * 2.0))));
+  float ringB = exp(-110.0 * abs(radius - 0.57));
+  float sweep = pow(max(0.0, cos(angle - iTime * 0.9)), 28.0);
+  col += (ringA * 0.28 + ringB * 0.14) * vec3(0.12, 0.48, 1.0);
+  col += sweep * exp(-5.0 * radius) * vec3(0.35, 0.12, 0.65);
 
   float vignette = 1.0 - 0.28 * smoothstep(0.35, 1.55, length(p));
   col *= vignette;
